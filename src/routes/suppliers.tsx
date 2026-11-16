@@ -1,3 +1,23 @@
-import {createFileRoute} from '@tanstack/react-router';
-import {Suppliers} from '@/components/supply-modules';
-export const Route=createFileRoute('/suppliers')({head:()=>({meta:[{"title": "Supplier intelligence | Supply Chain IQ"}, {"name": "description", "content": "Supplier intelligence for Supply Chain IQ: evidence-based supply chain risk analysis and decision support."}, {"property": "og:title", "content": "Supplier intelligence | Supply Chain IQ"}, {"property": "og:description", "content": "Supplier intelligence for Supply Chain IQ: evidence-based supply chain risk analysis and decision support."}, {"property": "og:type", "content": "website"}, {"name": "twitter:card", "content": "summary_large_image"}]}),component:Suppliers});
+import { createFileRoute } from "@tanstack/react-router";
+import { Suppliers } from "@/components/supply-modules";
+export const Route = createFileRoute("/suppliers")({
+  head: () => ({
+    meta: [
+      { title: "Supplier intelligence | Supply Chain IQ" },
+      {
+        name: "description",
+        content:
+          "Supplier intelligence for Supply Chain IQ: evidence-based supply chain risk analysis and decision support.",
+      },
+      { property: "og:title", content: "Supplier intelligence | Supply Chain IQ" },
+      {
+        property: "og:description",
+        content:
+          "Supplier intelligence for Supply Chain IQ: evidence-based supply chain risk analysis and decision support.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  }),
+  component: Suppliers,
+});

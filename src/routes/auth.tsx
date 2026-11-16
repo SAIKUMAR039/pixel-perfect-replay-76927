@@ -1,3 +1,23 @@
-import {createFileRoute} from '@tanstack/react-router';
-import {Auth} from '@/components/supply-modules';
-export const Route=createFileRoute('/auth')({head:()=>({meta:[{"title": "Sign in | Supply Chain IQ"}, {"name": "description", "content": "Sign in for Supply Chain IQ: evidence-based supply chain risk analysis and decision support."}, {"property": "og:title", "content": "Sign in | Supply Chain IQ"}, {"property": "og:description", "content": "Sign in for Supply Chain IQ: evidence-based supply chain risk analysis and decision support."}, {"property": "og:type", "content": "website"}, {"name": "twitter:card", "content": "summary_large_image"}]}),component:Auth});
+import { createFileRoute } from "@tanstack/react-router";
+import { Auth } from "@/components/supply-modules";
+export const Route = createFileRoute("/auth")({
+  head: () => ({
+    meta: [
+      { title: "Sign in | Supply Chain IQ" },
+      {
+        name: "description",
+        content:
+          "Sign in for Supply Chain IQ: evidence-based supply chain risk analysis and decision support.",
+      },
+      { property: "og:title", content: "Sign in | Supply Chain IQ" },
+      {
+        property: "og:description",
+        content:
+          "Sign in for Supply Chain IQ: evidence-based supply chain risk analysis and decision support.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  }),
+  component: Auth,
+});

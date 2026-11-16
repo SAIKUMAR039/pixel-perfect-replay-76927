@@ -1,3 +1,23 @@
-import {createFileRoute} from '@tanstack/react-router';
-import {Predictions} from '@/components/supply-modules';
-export const Route=createFileRoute('/predictions')({head:()=>({meta:[{"title": "Predictive risk intelligence | Supply Chain IQ"}, {"name": "description", "content": "Predictive risk intelligence for Supply Chain IQ: evidence-based supply chain risk analysis and decision support."}, {"property": "og:title", "content": "Predictive risk intelligence | Supply Chain IQ"}, {"property": "og:description", "content": "Predictive risk intelligence for Supply Chain IQ: evidence-based supply chain risk analysis and decision support."}, {"property": "og:type", "content": "website"}, {"name": "twitter:card", "content": "summary_large_image"}]}),component:Predictions});
+import { createFileRoute } from "@tanstack/react-router";
+import { Predictions } from "@/components/supply-modules";
+export const Route = createFileRoute("/predictions")({
+  head: () => ({
+    meta: [
+      { title: "Predictive risk intelligence | Supply Chain IQ" },
+      {
+        name: "description",
+        content:
+          "Predictive risk intelligence for Supply Chain IQ: evidence-based supply chain risk analysis and decision support.",
+      },
+      { property: "og:title", content: "Predictive risk intelligence | Supply Chain IQ" },
+      {
+        property: "og:description",
+        content:
+          "Predictive risk intelligence for Supply Chain IQ: evidence-based supply chain risk analysis and decision support.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  }),
+  component: Predictions,
+});

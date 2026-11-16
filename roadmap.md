@@ -1,7 +1,9 @@
 # Supply Chain IQ
-- [ ] Stage 1: Complete enterprise frontend, module navigation, sample-data analysis, comparison, simulation, exports.
-- [ ] Stage 2: Full backend and account flows (Cloud connected; supplier storage initial implementation).
-- [ ] Stage 3: Full upload, validation, preprocessing pipeline.
-- [ ] Stage 4–6: Python training service, evaluated model comparison, persisted models and prediction APIs. Blocker: separately hosted Python service required.
-- [ ] Stage 7–8: Full analytical intelligence and contextual AI explanations.
-- [ ] Stage 9–10: Persisted multi-scenario comparisons, complete integration and deployment.
+
+- [x] Enterprise frontend, all module navigation, sample-data analysis, supplier comparison, calculated simulation, PDF/CSV exports.
+- [x] Cloud connection, account entry, and private supplier CRUD verified after refresh.
+- [x] CSV preview, missing/duplicate checks, trimming, and duplicate removal.
+- [ ] Python training, full preprocessing including Excel, evaluated comparison, persisted models, and prediction APIs — blocked on a separately hosted Python service.
+- [ ] Full statistical/explainability and contextual LLM workflows — requires training results and the contextual AI stage.
+- [ ] Persisted recommendations, datasets, and multiple scenario comparisons — remaining integration stage.
+- [ ] Complete academic documentation and publish — remaining final stage; app is not a complete capstone yet.

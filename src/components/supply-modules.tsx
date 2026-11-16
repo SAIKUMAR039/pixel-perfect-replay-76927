@@ -1,26 +1,1266 @@
-import {useState,type FormEvent} from 'react';
-import {Link} from '@tanstack/react-router';
-import {ResponsiveContainer,BarChart,Bar,CartesianGrid,XAxis,YAxis,Tooltip,RadarChart,Radar,PolarGrid,PolarAngleAxis} from 'recharts';
-import {Plus,Download,Upload,Trash2,Pencil,FlaskConical,Database,Sparkles,FileText,ShieldCheck,ArrowUpRight,Check,Info} from 'lucide-react';
-import {Button} from '@/components/ui/button';
-import {Dialog,DialogContent,DialogHeader,DialogTitle} from '@/components/ui/dialog';
-import {toast} from 'sonner';
-import Papa from 'papaparse';
-import {jsPDF} from 'jspdf';
-import {supabase} from '@/integrations/supabase/client';
-import {lovable} from '@/integrations/lovable/index';
-import {LovableMark} from '@lovable.dev/cloud-auth-js/react';
-import {PageHeading,Panel,useWorkspace,EmptyState} from './supply-workspace';
-import {RiskTable} from './executive-dashboard';
-import {summary,riskScore,riskLevel,money,simulate,downloadCsv,type Supplier} from '@/lib/supply-data';
-export function Suppliers(){const {suppliers,setSuppliers,sample,reload}=useWorkspace();const [search,setSearch]=useState('');const [filter,setFilter]=useState('All');const [editing,setEditing]=useState<Supplier|null>(null);const [show,setShow]=useState(false);const [busy,setBusy]=useState(false);const filtered=suppliers.filter(s=>(s.name+' '+s.country).toLowerCase().includes(search.toLowerCase())&&(filter==='All'||riskLevel(riskScore(s))===filter));async function save(e:FormEvent<HTMLFormElement>){e.preventDefault();setBusy(true);const f=new FormData(e.currentTarget);const record={name:String(f.get('name')),country:String(f.get('country')),category:String(f.get('category')),delivery:Number(f.get('delivery')),quality:Number(f.get('quality')),reliability:Number(f.get('reliability')),cost:Number(f.get('cost')),disruptions:Number(f.get('disruptions')),active:true};if(sample){const next={...record,id:editing?.id??`SUP-${Date.now()}`};setSuppliers(editing?suppliers.map(s=>s.id===editing.id?next:s):[...suppliers,next]);toast.success('Sample supplier updated for this session.');}else{const result=editing?await supabase.from('suppliers').update(record).eq('id',editing.id):await supabase.from('suppliers').insert(record);if(result.error){toast.error('Could not save supplier.');setBusy(false);return;}await reload();toast.success('Supplier saved.');}setBusy(false);setShow(false);}async function remove(s:Supplier){if(!window.confirm(`Remove ${s.name}?`))return;if(sample)setSuppliers(suppliers.filter(x=>x.id!==s.id));else{const {error}=await supabase.from('suppliers').delete().eq('id',s.id);if(error){toast.error('Could not remove supplier.');return;}await reload();}toast.success('Supplier removed.');}return <><PageHeading title="Supplier intelligence" description="Understand performance, uncover risk, and build a resilient supplier network."><Button onClick={()=>{setEditing(null);setShow(true)}}><Plus/>Add supplier</Button></PageHeading><div className="data-note"><span className="sample-label">{sample?'SAMPLE DATA · SESSION ONLY':'SAVED WORKSPACE'}</span>{sample&&<Link to="/auth">Sign in to save your own suppliers <ArrowUpRight size={12}/></Link>}</div><div className="tool-row"><input className="search-input" aria-label="Search suppliers" placeholder="Search supplier or country…" value={search} onChange={e=>setSearch(e.target.value)}/><select aria-label="Filter risk" value={filter} onChange={e=>setFilter(e.target.value)}>{['All','High','Medium','Low'].map(s=><option key={s} value={s}>{s==='All'?'All risk levels':s+' risk'}</option>)}</select><Button variant="outline" onClick={()=>downloadCsv(filtered.map(s=>({...s,risk:riskScore(s)})),'suppliers.csv')}><Download/>Export</Button><Button variant="outline" asChild><Link to="/data"><Upload/>Upload dataset</Link></Button></div><Panel title={`Supplier network (${filtered.length})`} subtitle="Risk score weights delivery, quality, reliability, and historical disruptions">{filtered.length?<div className="table-scroll"><table><thead><tr><th>Supplier</th><th>Delivery</th><th>Quality</th><th>Reliability</th><th>Risk</th><th>Actions</th></tr></thead><tbody>{filtered.map(s=><tr key={s.id}><td><div className="supplier-cell"><span className="supplier-logo">{s.name.slice(0,2)}</span><span><strong>{s.name}</strong><small>{s.country} · {s.category}</small></span></div></td><td>{s.delivery}%</td><td>{s.quality}%</td><td>{s.reliability}%</td><td><span className={`risk-badge risk-${riskLevel(riskScore(s)).toLowerCase()}`}>{riskScore(s)} · {riskLevel(riskScore(s))}</span></td><td><Button size="icon" variant="ghost" aria-label={`Edit ${s.name}`} onClick={()=>{setEditing(s);setShow(true)}}><Pencil/></Button><Button size="icon" variant="ghost" aria-label={`Delete ${s.name}`} onClick={()=>void remove(s)}><Trash2/></Button></td></tr>)}</tbody></table></div>:<EmptyState text="No matching suppliers."/>}</Panel><Dialog open={show} onOpenChange={setShow}><DialogContent><DialogHeader><DialogTitle>{editing?'Edit supplier':'Add supplier'}</DialogTitle></DialogHeader><form onSubmit={save} className="dialog-form"><div className="form-grid">{[{name:'name',label:'Supplier name',type:'text',default:'',max:undefined},{name:'country',label:'Country',type:'text',default:'',max:undefined},{name:'category',label:'Category',type:'text',default:'Raw materials',max:undefined},{name:'delivery',label:'On-time delivery (%)',type:'number',default:90,max:100},{name:'quality',label:'Quality (%)',type:'number',default:95,max:100},{name:'reliability',label:'Reliability (%)',type:'number',default:90,max:100},{name:'cost',label:'Annual spend (USD)',type:'number',default:10000,max:undefined},{name:'disruptions',label:'Historical disruptions',type:'number',default:0,max:undefined}].map(f=><label className="form-field" key={f.name}>{f.label}<input name={f.name} required type={f.type} min={0} max={f.max} defaultValue={editing?.[f.name as keyof Supplier] as string|number??f.default}/></label>)}</div><Button type="submit" disabled={busy}>{busy?'Saving…':'Save supplier'}</Button></form></DialogContent></Dialog></>}
-export function Comparison(){const {suppliers}=useWorkspace();const [selected,setSelected]=useState<string[]>(suppliers.slice(0,3).map(s=>s.id));const rows=suppliers.filter(s=>selected.includes(s.id));const best=[...rows].sort((a,b)=>riskScore(a)-riskScore(b))[0];const radar=['delivery','quality','reliability'].map(key=>({metric:key[0].toUpperCase()+key.slice(1),...Object.fromEntries(rows.map(s=>[s.id,s[key as 'delivery'|'quality'|'reliability']]))}));return <><PageHeading title="Comparative analysis" description="Compare suppliers with evidence. Choose the right partner with confidence."><Button variant="outline" onClick={()=>downloadCsv(rows.map(s=>({...s,risk:riskScore(s)})),'supplier-comparison.csv')}><Download/>Export comparison</Button></PageHeading><Panel title="Select suppliers" subtitle="Select up to four suppliers to compare"><div className="check-list">{suppliers.slice(0,12).map(s=><label key={s.id}><input type="checkbox" checked={selected.includes(s.id)} disabled={!selected.includes(s.id)&&selected.length>=4} onChange={e=>setSelected(e.target.checked?[...selected,s.id]:selected.filter(id=>id!==s.id))}/>{s.name}</label>)}</div></Panel><div className="notice">{best?`Lowest calculated risk: ${best.name} (${riskScore(best)}/100). This ranking uses delivery, quality, reliability, and disruption history—not a trained model.`:'Select suppliers to compare their performance.'}</div><div className="chart-row"><Panel title="Performance comparison" subtitle="Percentage scores; higher is better"><div className="chart-container"><ResponsiveContainer><BarChart data={rows.map(s=>({name:s.name.split(' ')[0],delivery:s.delivery,quality:s.quality,reliability:s.reliability}))}><CartesianGrid vertical={false} stroke="var(--chart-grid)"/><XAxis dataKey="name"/><YAxis domain={[0,100]}/><Tooltip/><Bar dataKey="delivery" fill="var(--chart-teal)" radius={[3,3,0,0]}/><Bar dataKey="quality" fill="var(--chart-blue)" radius={[3,3,0,0]}/><Bar dataKey="reliability" fill="var(--warning)" radius={[3,3,0,0]}/></BarChart></ResponsiveContainer></div></Panel><Panel title="Supplier strengths" subtitle="Delivery, quality, and reliability"><div className="chart-container"><ResponsiveContainer><RadarChart data={radar}><PolarGrid stroke="var(--border)"/><PolarAngleAxis dataKey="metric"/>{rows.map((s,i)=><Radar key={s.id} name={s.name} dataKey={s.id} stroke={['var(--chart-teal)','var(--chart-blue)','var(--warning)','var(--danger)'][i]} fill={['var(--chart-teal)','var(--chart-blue)','var(--warning)','var(--danger)'][i]} fillOpacity={.08}/>) }<Tooltip/></RadarChart></ResponsiveContainer></div></Panel></div><Panel title="Detailed comparison"><RiskTable suppliers={rows} full/></Panel></>}
-export function DataManagement(){const [rows,setRows]=useState<Record<string,string>[]>([]);const [filename,setFilename]=useState('');const [error,setError]=useState('');const [cleaned,setCleaned]=useState(false);const missing=rows.reduce((a,r)=>a+Object.values(r).filter(v=>!v?.trim()).length,0);const dup=rows.length-new Set(rows.map(r=>JSON.stringify(r))).size;function upload(file:File|undefined){if(!file)return;setCleaned(false);setError('');if(!file.name.endsWith('.csv')){setError('CSV is currently supported. Excel import is planned for the next data stage.');return;}setFilename(file.name);Papa.parse<Record<string,string>>(file,{header:true,skipEmptyLines:true,complete:r=>{if(r.errors.length){setError(r.errors[0].message);return;}setRows(r.data);}});}return <><PageHeading title="Data management" description="Bring your supply chain data together. Build a reliable foundation for analysis."><Button variant="outline" onClick={()=>downloadCsv([{name:'Example Supplier',country:'India',category:'Electronics',delivery:92,quality:96,reliability:90,cost:50000,disruptions:2}],'supplier-template.csv')}><Download/>Download CSV template</Button></PageHeading><Panel title="Upload a dataset" subtitle="CSV preview and basic data-quality checks"><div className="module-body"><div className="upload-area"><Upload size={30}/><h3>Supply chain dataset</h3><p>{filename||'Choose a CSV file for validation and preview'}</p><label><Button asChild variant="outline"><span><Upload/>Choose CSV file</span></Button><input type="file" accept=".csv,.xlsx,.xls" aria-label="Upload dataset" className="sr-only" onChange={e=>upload(e.target.files?.[0])}/></label></div>{error&&<div className="notice negative">{error}</div>}</div></Panel>{rows.length>0&&<><div className="metric-subgrid mt-5">{[{title:'Dataset rows',value:rows.length},{title:'Missing values',value:missing},{title:'Duplicate rows',value:dup}].map(m=><div className="kpi" key={m.title}><div className="kpi-top">{m.title}</div><div className="kpi-value">{m.value}</div></div>)}</div><div className="tool-row"><Button onClick={()=>{setRows([...new Map(rows.map(r=>[JSON.stringify(r),r])).values()].map(r=>Object.fromEntries(Object.entries(r).map(([k,v])=>[k,v?.trim()??'']))));setCleaned(true);toast.success('Whitespace trimmed and duplicate rows removed.');}}><Check/>Clean dataset</Button><Button variant="outline" onClick={()=>downloadCsv(rows,'cleaned-dataset.csv')}><Download/>Export dataset</Button></div>{cleaned&&<div className="notice">Duplicate rows removed and whitespace trimmed. Missing values are preserved; no values have been invented. Scaling, encoding, and feature selection remain part of the training pipeline.</div>}<Panel title="Dataset preview" subtitle="First 10 rows"><div className="table-scroll"><table><thead><tr>{Object.keys(rows[0]).map(k=><th key={k}>{k}</th>)}</tr></thead><tbody>{rows.slice(0,10).map((r,i)=><tr key={i}>{Object.entries(r).map(([k,v])=><td key={k}>{v||'—'}</td>)}</tr>)}</tbody></table></div></Panel></>}</>}
-export function Laboratory(){const [task,setTask]=useState('Classification');return <><PageHeading title="ML laboratory" description="Reproducible experiments. Measured performance. Explainable predictions."><Button variant="outline" asChild><Link to="/data"><Database/>Prepare dataset</Link></Button></PageHeading><div className="tool-row"><select aria-label="Learning task" value={task} onChange={e=>setTask(e.target.value)}>{['Classification','Regression','Anomaly detection'].map(t=><option key={t}>{t}</option>)}</select><span className="risk-badge risk-medium">Training service not connected</span></div><div className="model-list">{(task==='Classification'?['Logistic Regression','Decision Tree','Random Forest','XGBoost']:task==='Regression'?['Linear Regression','Random Forest Regressor','XGBoost Regressor']:['Isolation Forest']).map(name=><div className="model-tile" key={name}><FlaskConical size={22} className="positive"/><h3>{name}</h3><p>{task==='Classification'?'Supplier disruption classification':task==='Regression'?'Delivery delay and cost forecasting':'Unusual supplier behaviour detection'}</p><div className="model-status">No trained model</div></div>)}</div><Panel title="Experiment configuration" subtitle="All algorithms must share a reproducible train/test split"><div className="module-body"><div className="form-grid"><label className="form-field">Dataset<select><option>Synthetic supplier snapshot — no labeled target</option></select></label><label className="form-field">Prediction target<select><option>{task==='Classification'?'Disruption (requires observed labels)':task==='Regression'?'Observed delivery delay':'Anomaly score'}</option></select></label><label className="form-field">Test split<select><option>20% test / 80% train</option></select></label><label className="form-field">Random seed<input value="42" readOnly/></label></div><div className="notice">No fabricated metrics. A separately hosted Python training service with scikit-learn and XGBoost is required to run these experiments. Accuracy, precision, recall, F1, ROC-AUC, confusion matrices, and timing will only appear after actual training.</div><Button disabled><FlaskConical/>Train models — service required</Button></div></Panel><Panel title="Model evaluation" subtitle="No experiments have been trained yet"><div className="table-scroll"><table><thead><tr>{['Model','Accuracy','Precision','Recall','F1-score','ROC-AUC','Training time'].map(t=><th key={t}>{t}</th>)}</tr></thead><tbody><tr><td colSpan={7}>No evaluation results. Connect the training service and a labeled dataset.</td></tr></tbody></table></div></Panel></>}
-export function Predictions(){const {suppliers}=useWorkspace();const rows=[...suppliers].sort((a,b)=>riskScore(b)-riskScore(a)).slice(0,8);return <><PageHeading title="Predictive risk intelligence" description="Understand risk signals and the factors behind every supplier score."/><div className="notice"><ShieldCheck size={16}/> These are calculated risk indicators, not model predictions. Disruption probabilities and forecasts are unavailable until a model is trained.</div><div className="action-grid">{rows.map(s=><div className="action-card" key={s.id}><span className={`risk-badge risk-${riskLevel(riskScore(s)).toLowerCase()}`}>{riskLevel(riskScore(s))} risk · {riskScore(s)}/100</span><h3>{s.name}</h3><p>On-time delivery: {s.delivery}%. Quality: {s.quality}%. Reliability: {s.reliability}%. Historical disruptions: {s.disruptions}.</p><h3>Recommended action</h3><p>{riskScore(s)>=60?'Review alternative suppliers and evaluate additional safety stock.':'Continue monitoring performance and disruption history.'}</p><Link to="/comparison">Compare alternatives <ArrowUpRight size={13}/></Link></div>)}</div></>}
-export function Analytics(){const {suppliers}=useWorkspace();const stats=summary(suppliers);const regions=[...new Set(suppliers.map(s=>s.country))].map(country=>{const rows=suppliers.filter(s=>s.country===country);return {country,risk:Math.round(summary(rows).risk),delivery:Math.round(summary(rows).delivery),spend:rows.reduce((a,s)=>a+s.cost,0)}});return <><PageHeading title="Analytical intelligence" description="Find the patterns behind supplier performance and financial exposure."/><div className="chart-row"><Panel title="Risk by supplier geography" subtitle="Calculated average risk score; geography itself is not a risk factor"><div className="chart-container"><ResponsiveContainer><BarChart data={regions}><CartesianGrid stroke="var(--chart-grid)" vertical={false}/><XAxis dataKey="country"/><YAxis domain={[0,100]}/><Tooltip/><Bar dataKey="risk" fill="var(--chart-teal)" radius={[4,4,0,0]}/></BarChart></ResponsiveContainer></div></Panel><Panel title="Statistical summary"><div className="module-body"><div className="result-item"><span>Average delivery</span><strong>{stats.delivery.toFixed(1)}%</strong></div><div className="result-item"><span>Average risk</span><strong>{stats.risk.toFixed(1)}/100</strong></div><div className="result-item"><span>Annual supplier spend</span><strong>{money(suppliers.reduce((a,s)=>a+s.cost,0))}</strong></div><div className="result-item"><span>Risk-weighted exposure</span><strong>{money(stats.exposure)}</strong></div></div></Panel></div><Panel title="Interpretation" subtitle="Evidence-based supplier performance analysis"><div className="module-body"><h3>What happened?</h3><p>{stats.high} suppliers exceed the high-risk threshold; average on-time delivery is {stats.delivery.toFixed(1)}%.</p><h3 className="mt-5">Why might it have happened?</h3><p>The score reflects poor delivery, reduced quality, low reliability, and historical disruptions. This is descriptive analysis and does not establish causation.</p><h3 className="mt-5">Potential impact and action</h3><p>Risk-weighted exposure is {money(stats.exposure)}. Prioritize reviews of high-risk suppliers and test contingency inventory levels.</p></div></Panel></>}
-export function Intelligence(){const {suppliers}=useWorkspace();const [question,setQuestion]=useState('Which suppliers should I review first?');const [answer,setAnswer]=useState('');function explain(){const top=[...suppliers].sort((a,b)=>riskScore(b)-riskScore(a)).slice(0,3);setAnswer(`Data-grounded summary (rule-based, not LLM-generated)\n\n${top.map(s=>`${s.name}: ${riskScore(s)}/100 risk. Delivery ${s.delivery}%, reliability ${s.reliability}%, and ${s.disruptions} historical disruptions. ${riskScore(s)>=60?'Review alternative sourcing and safety stock.':'Monitor ongoing performance.'}`).join('\n\n')}\n\nThese indicators are calculated from the current supplier records, not model-generated probabilities. An LLM explanation service is not yet connected.`);}return <><PageHeading title="AI supply chain intelligence" description="Evidence first. Understand risk with your supplier data in context."/><Panel title="Supply chain briefing" subtitle="Grounded in the current workspace"><div className="module-body"><label className="form-field">Your question<textarea value={question} onChange={e=>setQuestion(e.target.value)}/></label><div className="form-actions"><Button onClick={explain} disabled={!question.trim()||!suppliers.length}><Sparkles/>Generate data summary</Button></div>{answer&&<div className="chat-answer">{answer}</div>}<div className="notice">This stage provides a calculated supplier briefing. Free-form AI research and model explanations require the contextual AI service in a later stage.</div></div></Panel></>}
-export function Simulation(){const {suppliers}=useWorkspace();const base=suppliers.reduce((a,s)=>a+s.cost,0);const [transport,setTransport]=useState(20);const [demand,setDemand]=useState(0);const [delay,setDelay]=useState(0);const [run,setRun]=useState(false);const result=simulate(base,transport,demand,delay);return <><PageHeading title="What-if scenario simulation" description="Explore the unexpected. Make your next decision with greater confidence."><Button variant="outline" disabled={!run} onClick={()=>downloadCsv([{baseline:base,transportIncrease:transport,demandIncrease:demand,delayDays:delay,...result}],'scenario.csv')}><Download/>Export scenario</Button></PageHeading><div className="simulation-grid"><Panel title="Build a scenario" subtitle="Adjust the assumptions below"><div className="module-body">{[{label:'Transportation cost increase',value:transport,set:setTransport,max:100,unit:'%'},{label:'Demand increase',value:demand,set:setDemand,max:100,unit:'%'},{label:'Additional delivery delay',value:delay,set:setDelay,max:30,unit:' days'}].map(f=><div className="slider-field" key={f.label}><label>{f.label}<strong>{f.value}{f.unit}</strong></label><input aria-label={f.label} type="range" min={0} max={f.max} value={f.value} onChange={e=>{f.set(Number(e.target.value));setRun(false)}}/></div>)}<Button onClick={()=>setRun(true)}>Run simulation <ArrowUpRight/></Button></div></Panel><Panel title="Scenario impact" subtitle={run?'Calculated scenario results':'Current baseline'}><div className="module-body"><div className="result-item"><span>Baseline annual supplier spend</span><strong>{money(base)}</strong></div>{run&&<><div className="result-item"><span>Scenario annual spend</span><strong>{money(result.cost)}</strong></div><div className="result-item"><span>Additional financial exposure</span><strong className="negative">{money(result.cost-base)}</strong></div><div className="result-item"><span>Heuristic risk increase</span><strong className="warning">+{result.riskIncrease} points</strong></div><div className="result-item"><span>Additional safety-stock coverage</span><strong>{result.extraStock} days</strong></div><div className="notice">Mitigation: review transportation contracts, evaluate supplier diversification, and increase safety-stock coverage by {result.extraStock} days under these assumptions.</div></>}</div></Panel></div><div className="notice"><b>Assumptions:</b> Transportation represents 30% of baseline annual supplier spend. Demand scales all costs proportionally. Safety stock equals added delay × demand multiplier, rounded up. Risk change is a heuristic, not a trained prediction. No inventory units or actual lost revenue are inferred.</div></>}
-export function Decisions(){const {suppliers}=useWorkspace();const [statuses,setStatuses]=useState<Record<string,string>>({});const high=suppliers.filter(s=>riskScore(s)>=60);return <><PageHeading title="Decision support centre" description="From risk signals to clear, evidence-backed business actions."/><div className="data-note"><Info size={13}/> Action status is retained for this session; saved action tracking is planned.</div><div className="action-grid">{high.map(s=><div className="action-card" key={s.id}><span className="risk-badge risk-high">High priority</span><h3>Review {s.name}</h3><p><b>Evidence:</b> Risk {riskScore(s)}/100, delivery {s.delivery}%, {s.disruptions} historical disruptions.</p><h3>Recommended action</h3><p>Compare alternative suppliers and evaluate contingency safety stock. Expected benefit: lower dependence on an unreliable supplier; no unverified financial benefit is estimated.</p><label className="form-field mt-4">Action status<select value={statuses[s.id]??'Pending'} onChange={e=>setStatuses({...statuses,[s.id]:e.target.value})}>{['Pending','In Progress','Completed'].map(v=><option key={v}>{v}</option>)}</select></label></div>)}</div>{!high.length&&<EmptyState text="No high-risk supplier actions are currently needed."/>}</>}
-export function Reports(){const {suppliers,sample}=useWorkspace();function pdf(){const doc=new jsPDF();const stats=summary(suppliers);doc.setFontSize(22);doc.text('SUPPLY CHAIN IQ',20,25);doc.setFontSize(12);doc.text('Executive risk report',20,36);doc.setFontSize(10);const lines=[sample?'Synthetic sample dataset — academic demonstration':'Private supplier workspace',`Suppliers: ${stats.total} | Active: ${stats.active} | High risk: ${stats.high}`,`Average delivery: ${stats.delivery.toFixed(1)}% | Average risk: ${stats.risk.toFixed(1)}/100`,`Risk-weighted financial exposure: ${money(stats.exposure)}`,'','Top supplier risk indicators:',...[...suppliers].sort((a,b)=>riskScore(b)-riskScore(a)).slice(0,10).map(s=>`${s.name}: ${riskScore(s)}/100 | Delivery ${s.delivery}% | Disruptions ${s.disruptions}`),'','Method: capped weighted supplier risk score; not trained-model predictions.','No model evaluation or prediction results are available yet.','Recommendation: review high-risk supplier alternatives and safety stock.'];doc.text(lines,20,50,{maxWidth:170});doc.save('supply-chain-risk-report.pdf');}return <><PageHeading title="Reports" description="Share your intelligence. Export clear, evidence-based supply chain reports."/><div className="report-list">{[{title:'Executive risk report',text:'Supplier overview, calculated risk indicators, exposure, and recommended action.',action:pdf,label:'Download PDF'},{title:'Supplier analysis',text:'All supplier records, delivery performance, reliability, and calculated risk scores.',action:()=>downloadCsv(suppliers.map(s=>({...s,risk:riskScore(s)})),'supplier-analysis.csv'),label:'Download CSV'},{title:'Dataset template',text:'A structured supplier template for preparing your supply chain data.',action:()=>downloadCsv([{name:'Example',country:'India',category:'Electronics',delivery:90,quality:95,reliability:90,cost:50000,disruptions:1}],'dataset-template.csv'),label:'Download template'}].map(r=><div className="action-card" key={r.title}><FileText size={26} className="positive"/><h3>{r.title}</h3><p>{r.text}</p><Button className="mt-5" variant="outline" onClick={r.action}><Download/>{r.label}</Button></div>)}</div></>}
-export function Auth(){const {email}=useWorkspace();const [mode,setMode]=useState('signin');const [message,setMessage]=useState('');const [busy,setBusy]=useState(false);async function submit(e:FormEvent<HTMLFormElement>){e.preventDefault();setBusy(true);setMessage('');const f=new FormData(e.currentTarget);const email=String(f.get('email'));const password=String(f.get('password'));const result=mode==='reset'?await supabase.auth.resetPasswordForEmail(email,{redirectTo:window.location.origin+'/auth'}):mode==='signup'?await supabase.auth.signUp({email,password,options:{emailRedirectTo:window.location.origin}}):await supabase.auth.signInWithPassword({email,password});setBusy(false);setMessage(result.error?result.error.message:mode==='signup'?'Check your email to confirm your account.':mode==='reset'?'Check your email for the password reset link.':'Signed in. Your private supplier workspace is ready.');}async function social(provider:'google'|'lovable'){const result=await lovable.auth.signInWithOAuth(provider,{redirect_uri:window.location.origin});if(result.error)setMessage(result.error.message);}return <><PageHeading title="Your supply chain workspace" description="Sign in to securely save and manage your own supplier data."/><div className="auth-panel">{email?<><h2>You're signed in</h2><p>Your private supplier workspace is ready.</p><Button asChild><Link to="/suppliers">Manage suppliers <ArrowUpRight/></Link></Button></>:<><h2>{mode==='signup'?'Create your account':mode==='reset'?'Reset your password':'Welcome back'}</h2><p>Supply chain intelligence, connected to your data.</p><form onSubmit={submit}><label className="form-field">Email address<input name="email" type="email" required placeholder="you@company.com"/></label>{mode!=='reset'&&<label className="form-field">Password<input name="password" type="password" required minLength={8} placeholder="At least 8 characters"/></label>}<Button type="submit" disabled={busy}>{busy?'Please wait…':mode==='signup'?'Create account':mode==='reset'?'Send reset link':'Sign in'}</Button></form><div className="auth-social"><Button variant="outline" onClick={()=>void social('google')}><svg aria-hidden="true" viewBox="0 0 24 24"><path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"/><path fill="#34A853" d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09C3.26 21.3 7.31 24 12 24z"/><path fill="#FBBC05" d="M5.27 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.98-3.09z"/><path fill="#EA4335" d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.98 3.09c.95-2.85 3.6-4.96 6.73-4.96z"/></svg>Continue with Google</Button><Button variant="outline" onClick={()=>void social('lovable')}><LovableMark/>Continue with Lovable</Button></div><div className="auth-switch"><Button variant="link" size="sm" onClick={()=>setMode(mode==='signup'?'signin':'signup')}>{mode==='signup'?'Already have an account? Sign in':'Create an account'}</Button><Button variant="link" size="sm" onClick={()=>setMode(mode==='reset'?'signin':'reset')}>{mode==='reset'?'Back to sign in':'Forgot password?'}</Button></div></>}{message&&<div className="notice" role="status">{message}</div>}</div></>}
+import { useState, type FormEvent } from "react";
+import { Link } from "@tanstack/react-router";
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  RadarChart,
+  Radar,
+  PolarGrid,
+  PolarAngleAxis,
+} from "recharts";
+import {
+  Plus,
+  Download,
+  Upload,
+  Trash2,
+  Pencil,
+  FlaskConical,
+  Database,
+  Sparkles,
+  FileText,
+  ShieldCheck,
+  ArrowUpRight,
+  Check,
+  Info,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { toast } from "sonner";
+import Papa from "papaparse";
+import { jsPDF } from "jspdf";
+import { supabase } from "@/integrations/supabase/client";
+import { lovable } from "@/integrations/lovable/index";
+import { LovableMark } from "@lovable.dev/cloud-auth-js/react";
+import { PageHeading, Panel, useWorkspace, EmptyState } from "./supply-workspace";
+import { RiskTable } from "./executive-dashboard";
+import {
+  summary,
+  riskScore,
+  riskLevel,
+  money,
+  simulate,
+  downloadCsv,
+  type Supplier,
+} from "@/lib/supply-data";
+export function Suppliers() {
+  const { suppliers, setSuppliers, sample, reload } = useWorkspace();
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState("All");
+  const [editing, setEditing] = useState<Supplier | null>(null);
+  const [show, setShow] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const filtered = suppliers.filter(
+    (s) =>
+      (s.name + " " + s.country).toLowerCase().includes(search.toLowerCase()) &&
+      (filter === "All" || riskLevel(riskScore(s)) === filter),
+  );
+  async function save(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setBusy(true);
+    const f = new FormData(e.currentTarget);
+    const record = {
+      name: String(f.get("name")),
+      country: String(f.get("country")),
+      category: String(f.get("category")),
+      delivery: Number(f.get("delivery")),
+      quality: Number(f.get("quality")),
+      reliability: Number(f.get("reliability")),
+      cost: Number(f.get("cost")),
+      disruptions: Number(f.get("disruptions")),
+      active: true,
+    };
+    if (sample) {
+      const next = { ...record, id: editing?.id ?? `SUP-${Date.now()}` };
+      setSuppliers(
+        editing ? suppliers.map((s) => (s.id === editing.id ? next : s)) : [...suppliers, next],
+      );
+      toast.success("Sample supplier updated for this session.");
+    } else {
+      const result = editing
+        ? await supabase.from("suppliers").update(record).eq("id", editing.id)
+        : await supabase.from("suppliers").insert(record);
+      if (result.error) {
+        toast.error("Could not save supplier.");
+        setBusy(false);
+        return;
+      }
+      await reload();
+      toast.success("Supplier saved.");
+    }
+    setBusy(false);
+    setShow(false);
+  }
+  async function remove(s: Supplier) {
+    if (!window.confirm(`Remove ${s.name}?`)) return;
+    if (sample) setSuppliers(suppliers.filter((x) => x.id !== s.id));
+    else {
+      const { error } = await supabase.from("suppliers").delete().eq("id", s.id);
+      if (error) {
+        toast.error("Could not remove supplier.");
+        return;
+      }
+      await reload();
+    }
+    toast.success("Supplier removed.");
+  }
+  return (
+    <>
+      <PageHeading
+        title="Supplier intelligence"
+        description="Understand performance, uncover risk, and build a resilient supplier network."
+      >
+        <Button
+          onClick={() => {
+            setEditing(null);
+            setShow(true);
+          }}
+        >
+          <Plus />
+          Add supplier
+        </Button>
+      </PageHeading>
+      <div className="data-note">
+        <span className="sample-label">
+          {sample ? "SAMPLE DATA · SESSION ONLY" : "SAVED WORKSPACE"}
+        </span>
+        {sample && (
+          <Link to="/auth">
+            Sign in to save your own suppliers <ArrowUpRight size={12} />
+          </Link>
+        )}
+      </div>
+      <div className="tool-row">
+        <input
+          className="search-input"
+          aria-label="Search suppliers"
+          placeholder="Search supplier or country…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <select aria-label="Filter risk" value={filter} onChange={(e) => setFilter(e.target.value)}>
+          {["All", "High", "Medium", "Low"].map((s) => (
+            <option key={s} value={s}>
+              {s === "All" ? "All risk levels" : s + " risk"}
+            </option>
+          ))}
+        </select>
+        <Button
+          variant="outline"
+          onClick={() =>
+            downloadCsv(
+              filtered.map((s) => ({ ...s, risk: riskScore(s) })),
+              "suppliers.csv",
+            )
+          }
+        >
+          <Download />
+          Export
+        </Button>
+        <Button variant="outline" asChild>
+          <Link to="/data">
+            <Upload />
+            Upload dataset
+          </Link>
+        </Button>
+      </div>
+      <Panel
+        title={`Supplier network (${filtered.length})`}
+        subtitle="Risk score weights delivery, quality, reliability, and historical disruptions"
+      >
+        {filtered.length ? (
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Supplier</th>
+                  <th>Delivery</th>
+                  <th>Quality</th>
+                  <th>Reliability</th>
+                  <th>Risk</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((s) => (
+                  <tr key={s.id}>
+                    <td>
+                      <div className="supplier-cell">
+                        <span className="supplier-logo">{s.name.slice(0, 2)}</span>
+                        <span>
+                          <strong>{s.name}</strong>
+                          <small>
+                            {s.country} · {s.category}
+                          </small>
+                        </span>
+                      </div>
+                    </td>
+                    <td>{s.delivery}%</td>
+                    <td>{s.quality}%</td>
+                    <td>{s.reliability}%</td>
+                    <td>
+                      <span className={`risk-badge risk-${riskLevel(riskScore(s)).toLowerCase()}`}>
+                        {riskScore(s)} · {riskLevel(riskScore(s))}
+                      </span>
+                    </td>
+                    <td>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        aria-label={`Edit ${s.name}`}
+                        onClick={() => {
+                          setEditing(s);
+                          setShow(true);
+                        }}
+                      >
+                        <Pencil />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        aria-label={`Delete ${s.name}`}
+                        onClick={() => void remove(s)}
+                      >
+                        <Trash2 />
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <EmptyState text="No matching suppliers." />
+        )}
+      </Panel>
+      <Dialog open={show} onOpenChange={setShow}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editing ? "Edit supplier" : "Add supplier"}</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={save} className="dialog-form">
+            <div className="form-grid">
+              {[
+                { name: "name", label: "Supplier name", type: "text", default: "", max: undefined },
+                { name: "country", label: "Country", type: "text", default: "", max: undefined },
+                {
+                  name: "category",
+                  label: "Category",
+                  type: "text",
+                  default: "Raw materials",
+                  max: undefined,
+                },
+                {
+                  name: "delivery",
+                  label: "On-time delivery (%)",
+                  type: "number",
+                  default: 90,
+                  max: 100,
+                },
+                { name: "quality", label: "Quality (%)", type: "number", default: 95, max: 100 },
+                {
+                  name: "reliability",
+                  label: "Reliability (%)",
+                  type: "number",
+                  default: 90,
+                  max: 100,
+                },
+                {
+                  name: "cost",
+                  label: "Annual spend (USD)",
+                  type: "number",
+                  default: 10000,
+                  max: undefined,
+                },
+                {
+                  name: "disruptions",
+                  label: "Historical disruptions",
+                  type: "number",
+                  default: 0,
+                  max: undefined,
+                },
+              ].map((f) => (
+                <label className="form-field" key={f.name}>
+                  {f.label}
+                  <input
+                    name={f.name}
+                    required
+                    type={f.type}
+                    min={0}
+                    max={f.max}
+                    defaultValue={
+                      (editing?.[f.name as keyof Supplier] as string | number) ?? f.default
+                    }
+                  />
+                </label>
+              ))}
+            </div>
+            <Button type="submit" disabled={busy}>
+              {busy ? "Saving…" : "Save supplier"}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+export function Comparison() {
+  const { suppliers } = useWorkspace();
+  const [selected, setSelected] = useState<string[]>(suppliers.slice(0, 3).map((s) => s.id));
+  const rows = suppliers.filter((s) => selected.includes(s.id));
+  const best = [...rows].sort((a, b) => riskScore(a) - riskScore(b))[0];
+  const radar = ["delivery", "quality", "reliability"].map((key) => ({
+    metric: key.charAt(0).toUpperCase() + key.slice(1),
+    ...Object.fromEntries(
+      rows.map((s) => [s.id, s[key as "delivery" | "quality" | "reliability"]]),
+    ),
+  }));
+  return (
+    <>
+      <PageHeading
+        title="Comparative analysis"
+        description="Compare suppliers with evidence. Choose the right partner with confidence."
+      >
+        <Button
+          variant="outline"
+          onClick={() =>
+            downloadCsv(
+              rows.map((s) => ({ ...s, risk: riskScore(s) })),
+              "supplier-comparison.csv",
+            )
+          }
+        >
+          <Download />
+          Export comparison
+        </Button>
+      </PageHeading>
+      <Panel title="Select suppliers" subtitle="Select up to four suppliers to compare">
+        <div className="check-list">
+          {suppliers.slice(0, 12).map((s) => (
+            <label key={s.id}>
+              <input
+                type="checkbox"
+                checked={selected.includes(s.id)}
+                disabled={!selected.includes(s.id) && selected.length >= 4}
+                onChange={(e) =>
+                  setSelected(
+                    e.target.checked ? [...selected, s.id] : selected.filter((id) => id !== s.id),
+                  )
+                }
+              />
+              {s.name}
+            </label>
+          ))}
+        </div>
+      </Panel>
+      <div className="notice">
+        {best
+          ? `Lowest calculated risk: ${best.name} (${riskScore(best)}/100). This ranking uses delivery, quality, reliability, and disruption history—not a trained model.`
+          : "Select suppliers to compare their performance."}
+      </div>
+      <div className="chart-row">
+        <Panel title="Performance comparison" subtitle="Percentage scores; higher is better">
+          <div className="chart-container">
+            <ResponsiveContainer>
+              <BarChart
+                data={rows.map((s) => ({
+                  name: s.name.split(" ")[0],
+                  delivery: s.delivery,
+                  quality: s.quality,
+                  reliability: s.reliability,
+                }))}
+              >
+                <CartesianGrid vertical={false} stroke="var(--chart-grid)" />
+                <XAxis dataKey="name" />
+                <YAxis domain={[0, 100]} />
+                <Tooltip />
+                <Bar dataKey="delivery" fill="var(--chart-teal)" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="quality" fill="var(--chart-blue)" radius={[3, 3, 0, 0]} />
+                <Bar dataKey="reliability" fill="var(--warning)" radius={[3, 3, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Panel>
+        <Panel title="Supplier strengths" subtitle="Delivery, quality, and reliability">
+          <div className="chart-container">
+            <ResponsiveContainer>
+              <RadarChart data={radar}>
+                <PolarGrid stroke="var(--border)" />
+                <PolarAngleAxis dataKey="metric" />
+                {rows.map((s, i) => (
+                  <Radar
+                    key={s.id}
+                    name={s.name}
+                    dataKey={s.id}
+                    stroke={
+                      ["var(--chart-teal)", "var(--chart-blue)", "var(--warning)", "var(--danger)"][
+                        i
+                      ]
+                    }
+                    fill={
+                      ["var(--chart-teal)", "var(--chart-blue)", "var(--warning)", "var(--danger)"][
+                        i
+                      ]
+                    }
+                    fillOpacity={0.08}
+                  />
+                ))}
+                <Tooltip />
+              </RadarChart>
+            </ResponsiveContainer>
+          </div>
+        </Panel>
+      </div>
+      <Panel title="Detailed comparison">
+        <RiskTable suppliers={rows} full />
+      </Panel>
+    </>
+  );
+}
+export function DataManagement() {
+  const [rows, setRows] = useState<Record<string, string>[]>([]);
+  const [filename, setFilename] = useState("");
+  const [error, setError] = useState("");
+  const [cleaned, setCleaned] = useState(false);
+  const missing = rows.reduce((a, r) => a + Object.values(r).filter((v) => !v?.trim()).length, 0);
+  const dup = rows.length - new Set(rows.map((r) => JSON.stringify(r))).size;
+  function upload(file: File | undefined) {
+    if (!file) return;
+    setCleaned(false);
+    setError("");
+    if (!file.name.endsWith(".csv")) {
+      setError("CSV is currently supported. Excel import is planned for the next data stage.");
+      return;
+    }
+    setFilename(file.name);
+    Papa.parse<Record<string, string>>(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (r) => {
+        if (r.errors.length) {
+          setError(r.errors[0]?.message ?? "Invalid CSV");
+          return;
+        }
+        setRows(r.data);
+      },
+    });
+  }
+  return (
+    <>
+      <PageHeading
+        title="Data management"
+        description="Bring your supply chain data together. Build a reliable foundation for analysis."
+      >
+        <Button
+          variant="outline"
+          onClick={() =>
+            downloadCsv(
+              [
+                {
+                  name: "Example Supplier",
+                  country: "India",
+                  category: "Electronics",
+                  delivery: 92,
+                  quality: 96,
+                  reliability: 90,
+                  cost: 50000,
+                  disruptions: 2,
+                },
+              ],
+              "supplier-template.csv",
+            )
+          }
+        >
+          <Download />
+          Download CSV template
+        </Button>
+      </PageHeading>
+      <Panel title="Upload a dataset" subtitle="CSV preview and basic data-quality checks">
+        <div className="module-body">
+          <div className="upload-area">
+            <Upload size={30} />
+            <h3>Supply chain dataset</h3>
+            <p>{filename || "Choose a CSV file for validation and preview"}</p>
+            <label>
+              <Button asChild variant="outline">
+                <span>
+                  <Upload />
+                  Choose CSV file
+                </span>
+              </Button>
+              <input
+                type="file"
+                accept=".csv,.xlsx,.xls"
+                aria-label="Upload dataset"
+                className="sr-only"
+                onChange={(e) => upload(e.target.files?.[0])}
+              />
+            </label>
+          </div>
+          {error && <div className="notice negative">{error}</div>}
+        </div>
+      </Panel>
+      {rows.length > 0 && (
+        <>
+          <div className="metric-subgrid mt-5">
+            {[
+              { title: "Dataset rows", value: rows.length },
+              { title: "Missing values", value: missing },
+              { title: "Duplicate rows", value: dup },
+            ].map((m) => (
+              <div className="kpi" key={m.title}>
+                <div className="kpi-top">{m.title}</div>
+                <div className="kpi-value">{m.value}</div>
+              </div>
+            ))}
+          </div>
+          <div className="tool-row">
+            <Button
+              onClick={() => {
+                setRows(
+                  [...new Map(rows.map((r) => [JSON.stringify(r), r])).values()].map((r) =>
+                    Object.fromEntries(Object.entries(r).map(([k, v]) => [k, v?.trim() ?? ""])),
+                  ),
+                );
+                setCleaned(true);
+                toast.success("Whitespace trimmed and duplicate rows removed.");
+              }}
+            >
+              <Check />
+              Clean dataset
+            </Button>
+            <Button variant="outline" onClick={() => downloadCsv(rows, "cleaned-dataset.csv")}>
+              <Download />
+              Export dataset
+            </Button>
+          </div>
+          {cleaned && (
+            <div className="notice">
+              Duplicate rows removed and whitespace trimmed. Missing values are preserved; no values
+              have been invented. Scaling, encoding, and feature selection remain part of the
+              training pipeline.
+            </div>
+          )}
+          <Panel title="Dataset preview" subtitle="First 10 rows">
+            <div className="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    {Object.keys(rows[0] ?? {}).map((k) => (
+                      <th key={k}>{k}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.slice(0, 10).map((r, i) => (
+                    <tr key={i}>
+                      {Object.entries(r).map(([k, v]) => (
+                        <td key={k}>{v || "—"}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Panel>
+        </>
+      )}
+    </>
+  );
+}
+export function Laboratory() {
+  const [task, setTask] = useState("Classification");
+  return (
+    <>
+      <PageHeading
+        title="ML laboratory"
+        description="Reproducible experiments. Measured performance. Explainable predictions."
+      >
+        <Button variant="outline" asChild>
+          <Link to="/data">
+            <Database />
+            Prepare dataset
+          </Link>
+        </Button>
+      </PageHeading>
+      <div className="tool-row">
+        <select aria-label="Learning task" value={task} onChange={(e) => setTask(e.target.value)}>
+          {["Classification", "Regression", "Anomaly detection"].map((t) => (
+            <option key={t}>{t}</option>
+          ))}
+        </select>
+        <span className="risk-badge risk-medium">Training service not connected</span>
+      </div>
+      <div className="model-list">
+        {(task === "Classification"
+          ? ["Logistic Regression", "Decision Tree", "Random Forest", "XGBoost"]
+          : task === "Regression"
+            ? ["Linear Regression", "Random Forest Regressor", "XGBoost Regressor"]
+            : ["Isolation Forest"]
+        ).map((name) => (
+          <div className="model-tile" key={name}>
+            <FlaskConical size={22} className="positive" />
+            <h3>{name}</h3>
+            <p>
+              {task === "Classification"
+                ? "Supplier disruption classification"
+                : task === "Regression"
+                  ? "Delivery delay and cost forecasting"
+                  : "Unusual supplier behaviour detection"}
+            </p>
+            <div className="model-status">No trained model</div>
+          </div>
+        ))}
+      </div>
+      <Panel
+        title="Experiment configuration"
+        subtitle="All algorithms must share a reproducible train/test split"
+      >
+        <div className="module-body">
+          <div className="form-grid">
+            <label className="form-field">
+              Dataset
+              <select>
+                <option>Synthetic supplier snapshot — no labeled target</option>
+              </select>
+            </label>
+            <label className="form-field">
+              Prediction target
+              <select>
+                <option>
+                  {task === "Classification"
+                    ? "Disruption (requires observed labels)"
+                    : task === "Regression"
+                      ? "Observed delivery delay"
+                      : "Anomaly score"}
+                </option>
+              </select>
+            </label>
+            <label className="form-field">
+              Test split
+              <select>
+                <option>20% test / 80% train</option>
+              </select>
+            </label>
+            <label className="form-field">
+              Random seed
+              <input value="42" readOnly />
+            </label>
+          </div>
+          <div className="notice">
+            No fabricated metrics. A separately hosted Python training service with scikit-learn and
+            XGBoost is required to run these experiments. Accuracy, precision, recall, F1, ROC-AUC,
+            confusion matrices, and timing will only appear after actual training.
+          </div>
+          <Button disabled>
+            <FlaskConical />
+            Train models — service required
+          </Button>
+        </div>
+      </Panel>
+      <Panel title="Model evaluation" subtitle="No experiments have been trained yet">
+        <div className="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                {[
+                  "Model",
+                  "Accuracy",
+                  "Precision",
+                  "Recall",
+                  "F1-score",
+                  "ROC-AUC",
+                  "Training time",
+                ].map((t) => (
+                  <th key={t}>{t}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td colSpan={7}>
+                  No evaluation results. Connect the training service and a labeled dataset.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+    </>
+  );
+}
+export function Predictions() {
+  const { suppliers } = useWorkspace();
+  const rows = [...suppliers].sort((a, b) => riskScore(b) - riskScore(a)).slice(0, 8);
+  return (
+    <>
+      <PageHeading
+        title="Predictive risk intelligence"
+        description="Understand risk signals and the factors behind every supplier score."
+      />
+      <div className="notice">
+        <ShieldCheck size={16} /> These are calculated risk indicators, not model predictions.
+        Disruption probabilities and forecasts are unavailable until a model is trained.
+      </div>
+      <div className="action-grid">
+        {rows.map((s) => (
+          <div className="action-card" key={s.id}>
+            <span className={`risk-badge risk-${riskLevel(riskScore(s)).toLowerCase()}`}>
+              {riskLevel(riskScore(s))} risk · {riskScore(s)}/100
+            </span>
+            <h3>{s.name}</h3>
+            <p>
+              On-time delivery: {s.delivery}%. Quality: {s.quality}%. Reliability: {s.reliability}%.
+              Historical disruptions: {s.disruptions}.
+            </p>
+            <h3>Recommended action</h3>
+            <p>
+              {riskScore(s) >= 60
+                ? "Review alternative suppliers and evaluate additional safety stock."
+                : "Continue monitoring performance and disruption history."}
+            </p>
+            <Link to="/comparison">
+              Compare alternatives <ArrowUpRight size={13} />
+            </Link>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+export function Analytics() {
+  const { suppliers } = useWorkspace();
+  const stats = summary(suppliers);
+  const regions = [...new Set(suppliers.map((s) => s.country))].map((country) => {
+    const rows = suppliers.filter((s) => s.country === country);
+    return {
+      country,
+      risk: Math.round(summary(rows).risk),
+      delivery: Math.round(summary(rows).delivery),
+      spend: rows.reduce((a, s) => a + s.cost, 0),
+    };
+  });
+  return (
+    <>
+      <PageHeading
+        title="Analytical intelligence"
+        description="Find the patterns behind supplier performance and financial exposure."
+      />
+      <div className="chart-row">
+        <Panel
+          title="Risk by supplier geography"
+          subtitle="Calculated average risk score; geography itself is not a risk factor"
+        >
+          <div className="chart-container">
+            <ResponsiveContainer>
+              <BarChart data={regions}>
+                <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
+                <XAxis dataKey="country" />
+                <YAxis domain={[0, 100]} />
+                <Tooltip />
+                <Bar dataKey="risk" fill="var(--chart-teal)" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Panel>
+        <Panel title="Statistical summary">
+          <div className="module-body">
+            <div className="result-item">
+              <span>Average delivery</span>
+              <strong>{stats.delivery.toFixed(1)}%</strong>
+            </div>
+            <div className="result-item">
+              <span>Average risk</span>
+              <strong>{stats.risk.toFixed(1)}/100</strong>
+            </div>
+            <div className="result-item">
+              <span>Annual supplier spend</span>
+              <strong>{money(suppliers.reduce((a, s) => a + s.cost, 0))}</strong>
+            </div>
+            <div className="result-item">
+              <span>Risk-weighted exposure</span>
+              <strong>{money(stats.exposure)}</strong>
+            </div>
+          </div>
+        </Panel>
+      </div>
+      <Panel title="Interpretation" subtitle="Evidence-based supplier performance analysis">
+        <div className="module-body">
+          <h3>What happened?</h3>
+          <p>
+            {stats.high} suppliers exceed the high-risk threshold; average on-time delivery is{" "}
+            {stats.delivery.toFixed(1)}%.
+          </p>
+          <h3 className="mt-5">Why might it have happened?</h3>
+          <p>
+            The score reflects poor delivery, reduced quality, low reliability, and historical
+            disruptions. This is descriptive analysis and does not establish causation.
+          </p>
+          <h3 className="mt-5">Potential impact and action</h3>
+          <p>
+            Risk-weighted exposure is {money(stats.exposure)}. Prioritize reviews of high-risk
+            suppliers and test contingency inventory levels.
+          </p>
+        </div>
+      </Panel>
+    </>
+  );
+}
+export function Intelligence() {
+  const { suppliers } = useWorkspace();
+  const [question, setQuestion] = useState("Which suppliers should I review first?");
+  const [answer, setAnswer] = useState("");
+  function explain() {
+    const top = [...suppliers].sort((a, b) => riskScore(b) - riskScore(a)).slice(0, 3);
+    setAnswer(
+      `Data-grounded summary (rule-based, not LLM-generated)\n\n${top.map((s) => `${s.name}: ${riskScore(s)}/100 risk. Delivery ${s.delivery}%, reliability ${s.reliability}%, and ${s.disruptions} historical disruptions. ${riskScore(s) >= 60 ? "Review alternative sourcing and safety stock." : "Monitor ongoing performance."}`).join("\n\n")}\n\nThese indicators are calculated from the current supplier records, not model-generated probabilities. An LLM explanation service is not yet connected.`,
+    );
+  }
+  return (
+    <>
+      <PageHeading
+        title="AI supply chain intelligence"
+        description="Evidence first. Understand risk with your supplier data in context."
+      />
+      <Panel title="Supply chain briefing" subtitle="Grounded in the current workspace">
+        <div className="module-body">
+          <label className="form-field">
+            Your question
+            <textarea value={question} onChange={(e) => setQuestion(e.target.value)} />
+          </label>
+          <div className="form-actions">
+            <Button onClick={explain} disabled={!question.trim() || !suppliers.length}>
+              <Sparkles />
+              Generate data summary
+            </Button>
+          </div>
+          {answer && <div className="chat-answer">{answer}</div>}
+          <div className="notice">
+            This stage provides a calculated supplier briefing. Free-form AI research and model
+            explanations require the contextual AI service in a later stage.
+          </div>
+        </div>
+      </Panel>
+    </>
+  );
+}
+export function Simulation() {
+  const { suppliers } = useWorkspace();
+  const base = suppliers.reduce((a, s) => a + s.cost, 0);
+  const [transport, setTransport] = useState(20);
+  const [demand, setDemand] = useState(0);
+  const [delay, setDelay] = useState(0);
+  const [run, setRun] = useState(false);
+  const result = simulate(base, transport, demand, delay);
+  return (
+    <>
+      <PageHeading
+        title="What-if scenario simulation"
+        description="Explore the unexpected. Make your next decision with greater confidence."
+      >
+        <Button
+          variant="outline"
+          disabled={!run}
+          onClick={() =>
+            downloadCsv(
+              [
+                {
+                  baseline: base,
+                  transportIncrease: transport,
+                  demandIncrease: demand,
+                  delayDays: delay,
+                  ...result,
+                },
+              ],
+              "scenario.csv",
+            )
+          }
+        >
+          <Download />
+          Export scenario
+        </Button>
+      </PageHeading>
+      <div className="simulation-grid">
+        <Panel title="Build a scenario" subtitle="Adjust the assumptions below">
+          <div className="module-body">
+            {[
+              {
+                label: "Transportation cost increase",
+                value: transport,
+                set: setTransport,
+                max: 100,
+                unit: "%",
+              },
+              { label: "Demand increase", value: demand, set: setDemand, max: 100, unit: "%" },
+              {
+                label: "Additional delivery delay",
+                value: delay,
+                set: setDelay,
+                max: 30,
+                unit: " days",
+              },
+            ].map((f) => (
+              <div className="slider-field" key={f.label}>
+                <label>
+                  {f.label}
+                  <strong>
+                    {f.value}
+                    {f.unit}
+                  </strong>
+                </label>
+                <input
+                  aria-label={f.label}
+                  type="range"
+                  min={0}
+                  max={f.max}
+                  value={f.value}
+                  onChange={(e) => {
+                    f.set(Number(e.target.value));
+                    setRun(false);
+                  }}
+                />
+              </div>
+            ))}
+            <Button onClick={() => setRun(true)}>
+              Run simulation <ArrowUpRight />
+            </Button>
+          </div>
+        </Panel>
+        <Panel
+          title="Scenario impact"
+          subtitle={run ? "Calculated scenario results" : "Current baseline"}
+        >
+          <div className="module-body">
+            <div className="result-item">
+              <span>Baseline annual supplier spend</span>
+              <strong>{money(base)}</strong>
+            </div>
+            {run && (
+              <>
+                <div className="result-item">
+                  <span>Scenario annual spend</span>
+                  <strong>{money(result.cost)}</strong>
+                </div>
+                <div className="result-item">
+                  <span>Additional financial exposure</span>
+                  <strong className="negative">{money(result.cost - base)}</strong>
+                </div>
+                <div className="result-item">
+                  <span>Heuristic risk increase</span>
+                  <strong className="warning">+{result.riskIncrease} points</strong>
+                </div>
+                <div className="result-item">
+                  <span>Additional safety-stock coverage</span>
+                  <strong>{result.extraStock} days</strong>
+                </div>
+                <div className="notice">
+                  Mitigation: review transportation contracts, evaluate supplier diversification,
+                  and increase safety-stock coverage by {result.extraStock} days under these
+                  assumptions.
+                </div>
+              </>
+            )}
+          </div>
+        </Panel>
+      </div>
+      <div className="notice">
+        <b>Assumptions:</b> Transportation represents 30% of baseline annual supplier spend. Demand
+        scales all costs proportionally. Safety stock equals added delay × demand multiplier,
+        rounded up. Risk change is a heuristic, not a trained prediction. No inventory units or
+        actual lost revenue are inferred.
+      </div>
+    </>
+  );
+}
+export function Decisions() {
+  const { suppliers } = useWorkspace();
+  const [statuses, setStatuses] = useState<Record<string, string>>({});
+  const high = suppliers.filter((s) => riskScore(s) >= 60);
+  return (
+    <>
+      <PageHeading
+        title="Decision support centre"
+        description="From risk signals to clear, evidence-backed business actions."
+      />
+      <div className="data-note">
+        <Info size={13} /> Action status is retained for this session; saved action tracking is
+        planned.
+      </div>
+      <div className="action-grid">
+        {high.map((s) => (
+          <div className="action-card" key={s.id}>
+            <span className="risk-badge risk-high">High priority</span>
+            <h3>Review {s.name}</h3>
+            <p>
+              <b>Evidence:</b> Risk {riskScore(s)}/100, delivery {s.delivery}%, {s.disruptions}{" "}
+              historical disruptions.
+            </p>
+            <h3>Recommended action</h3>
+            <p>
+              Compare alternative suppliers and evaluate contingency safety stock. Expected benefit:
+              lower dependence on an unreliable supplier; no unverified financial benefit is
+              estimated.
+            </p>
+            <label className="form-field mt-4">
+              Action status
+              <select
+                value={statuses[s.id] ?? "Pending"}
+                onChange={(e) => setStatuses({ ...statuses, [s.id]: e.target.value })}
+              >
+                {["Pending", "In Progress", "Completed"].map((v) => (
+                  <option key={v}>{v}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+        ))}
+      </div>
+      {!high.length && <EmptyState text="No high-risk supplier actions are currently needed." />}
+    </>
+  );
+}
+export function Reports() {
+  const { suppliers, sample } = useWorkspace();
+  function pdf() {
+    const doc = new jsPDF();
+    const stats = summary(suppliers);
+    doc.setFontSize(22);
+    doc.text("SUPPLY CHAIN IQ", 20, 25);
+    doc.setFontSize(12);
+    doc.text("Executive risk report", 20, 36);
+    doc.setFontSize(10);
+    const lines = [
+      sample ? "Synthetic sample dataset — academic demonstration" : "Private supplier workspace",
+      `Suppliers: ${stats.total} | Active: ${stats.active} | High risk: ${stats.high}`,
+      `Average delivery: ${stats.delivery.toFixed(1)}% | Average risk: ${stats.risk.toFixed(1)}/100`,
+      `Risk-weighted financial exposure: ${money(stats.exposure)}`,
+      "",
+      "Top supplier risk indicators:",
+      ...[...suppliers]
+        .sort((a, b) => riskScore(b) - riskScore(a))
+        .slice(0, 10)
+        .map(
+          (s) =>
+            `${s.name}: ${riskScore(s)}/100 | Delivery ${s.delivery}% | Disruptions ${s.disruptions}`,
+        ),
+      "",
+      "Method: capped weighted supplier risk score; not trained-model predictions.",
+      "No model evaluation or prediction results are available yet.",
+      "Recommendation: review high-risk supplier alternatives and safety stock.",
+    ];
+    doc.text(lines, 20, 50, { maxWidth: 170 });
+    doc.save("supply-chain-risk-report.pdf");
+  }
+  return (
+    <>
+      <PageHeading
+        title="Reports"
+        description="Share your intelligence. Export clear, evidence-based supply chain reports."
+      />
+      <div className="report-list">
+        {[
+          {
+            title: "Executive risk report",
+            text: "Supplier overview, calculated risk indicators, exposure, and recommended action.",
+            action: pdf,
+            label: "Download PDF",
+          },
+          {
+            title: "Supplier analysis",
+            text: "All supplier records, delivery performance, reliability, and calculated risk scores.",
+            action: () =>
+              downloadCsv(
+                suppliers.map((s) => ({ ...s, risk: riskScore(s) })),
+                "supplier-analysis.csv",
+              ),
+            label: "Download CSV",
+          },
+          {
+            title: "Dataset template",
+            text: "A structured supplier template for preparing your supply chain data.",
+            action: () =>
+              downloadCsv(
+                [
+                  {
+                    name: "Example",
+                    country: "India",
+                    category: "Electronics",
+                    delivery: 90,
+                    quality: 95,
+                    reliability: 90,
+                    cost: 50000,
+                    disruptions: 1,
+                  },
+                ],
+                "dataset-template.csv",
+              ),
+            label: "Download template",
+          },
+        ].map((r) => (
+          <div className="action-card" key={r.title}>
+            <FileText size={26} className="positive" />
+            <h3>{r.title}</h3>
+            <p>{r.text}</p>
+            <Button className="mt-5" variant="outline" onClick={r.action}>
+              <Download />
+              {r.label}
+            </Button>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+export function Auth() {
+  const { email } = useWorkspace();
+  const [mode, setMode] = useState("signin");
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setBusy(true);
+    setMessage("");
+    const f = new FormData(e.currentTarget);
+    const email = String(f.get("email"));
+    const password = String(f.get("password"));
+    const result =
+      mode === "reset"
+        ? await supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: window.location.origin + "/auth",
+          })
+        : mode === "signup"
+          ? await supabase.auth.signUp({
+              email,
+              password,
+              options: { emailRedirectTo: window.location.origin },
+            })
+          : await supabase.auth.signInWithPassword({ email, password });
+    setBusy(false);
+    setMessage(
+      result.error
+        ? result.error.message
+        : mode === "signup"
+          ? "Check your email to confirm your account."
+          : mode === "reset"
+            ? "Check your email for the password reset link."
+            : "Signed in. Your private supplier workspace is ready.",
+    );
+  }
+  async function social(provider: "google" | "lovable") {
+    const result = await lovable.auth.signInWithOAuth(provider, {
+      redirect_uri: window.location.origin,
+    });
+    if (result.error) setMessage(result.error.message);
+  }
+  return (
+    <>
+      <PageHeading
+        title="Your supply chain workspace"
+        description="Sign in to securely save and manage your own supplier data."
+      />
+      <div className="auth-panel">
+        {email ? (
+          <>
+            <h2>You're signed in</h2>
+            <p>Your private supplier workspace is ready.</p>
+            <Button asChild>
+              <Link to="/suppliers">
+                Manage suppliers <ArrowUpRight />
+              </Link>
+            </Button>
+          </>
+        ) : (
+          <>
+            <h2>
+              {mode === "signup"
+                ? "Create your account"
+                : mode === "reset"
+                  ? "Reset your password"
+                  : "Welcome back"}
+            </h2>
+            <p>Supply chain intelligence, connected to your data.</p>
+            <form onSubmit={submit}>
+              <label className="form-field">
+                Email address
+                <input name="email" type="email" required placeholder="you@company.com" />
+              </label>
+              {mode !== "reset" && (
+                <label className="form-field">
+                  Password
+                  <input
+                    name="password"
+                    type="password"
+                    required
+                    minLength={8}
+                    placeholder="At least 8 characters"
+                  />
+                </label>
+              )}
+              <Button type="submit" disabled={busy}>
+                {busy
+                  ? "Please wait…"
+                  : mode === "signup"
+                    ? "Create account"
+                    : mode === "reset"
+                      ? "Send reset link"
+                      : "Sign in"}
+              </Button>
+            </form>
+            <div className="auth-social">
+              <Button variant="outline" onClick={() => void social("google")}>
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <path
+                    fill="#4285F4"
+                    d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58v3h3.86c2.26-2.09 3.56-5.17 3.56-8.82z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.86-3c-1.08.72-2.45 1.16-4.07 1.16-3.13 0-5.78-2.11-6.73-4.96H1.29v3.09C3.26 21.3 7.31 24 12 24z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.27 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.62H1.29C.47 8.24 0 10.06 0 12s.47 3.76 1.29 5.38l3.98-3.09z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.26 2.7 1.29 6.62l3.98 3.09c.95-2.85 3.6-4.96 6.73-4.96z"
+                  />
+                </svg>
+                Continue with Google
+              </Button>
+              <Button variant="outline" onClick={() => void social("lovable")}>
+                <LovableMark />
+                Continue with Lovable
+              </Button>
+            </div>
+            <div className="auth-switch">
+              <Button
+                variant="link"
+                size="sm"
+                onClick={() => setMode(mode === "signup" ? "signin" : "signup")}
+              >
+                {mode === "signup" ? "Already have an account? Sign in" : "Create an account"}
+              </Button>
+              <Button
+                variant="link"
+                size="sm"
+                onClick={() => setMode(mode === "reset" ? "signin" : "reset")}
+              >
+                {mode === "reset" ? "Back to sign in" : "Forgot password?"}
+              </Button>
+            </div>
+          </>
+        )}
+        {message && (
+          <div className="notice" role="status">
+            {message}
+          </div>
+        )}
+      </div>
+    </>
+  );
+}

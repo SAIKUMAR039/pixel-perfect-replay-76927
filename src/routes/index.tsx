@@ -1,3 +1,23 @@
-import {createFileRoute} from '@tanstack/react-router';
-import {ExecutiveDashboard} from '@/components/executive-dashboard';
-export const Route=createFileRoute('/')({head:()=>({meta:[{"title": "Executive dashboard | Supply Chain IQ"}, {"name": "description", "content": "Executive dashboard for Supply Chain IQ: evidence-based supply chain risk analysis and decision support."}, {"property": "og:title", "content": "Executive dashboard | Supply Chain IQ"}, {"property": "og:description", "content": "Executive dashboard for Supply Chain IQ: evidence-based supply chain risk analysis and decision support."}, {"property": "og:type", "content": "website"}, {"name": "twitter:card", "content": "summary_large_image"}]}),component:ExecutiveDashboard});
+import { createFileRoute } from "@tanstack/react-router";
+import { ExecutiveDashboard } from "@/components/executive-dashboard";
+export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: [
+      { title: "Executive dashboard | Supply Chain IQ" },
+      {
+        name: "description",
+        content:
+          "Executive dashboard for Supply Chain IQ: evidence-based supply chain risk analysis and decision support.",
+      },
+      { property: "og:title", content: "Executive dashboard | Supply Chain IQ" },
+      {
+        property: "og:description",
+        content:
+          "Executive dashboard for Supply Chain IQ: evidence-based supply chain risk analysis and decision support.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  }),
+  component: ExecutiveDashboard,
+});
