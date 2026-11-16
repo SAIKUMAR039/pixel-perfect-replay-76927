@@ -1,0 +1,3 @@
+import {createFileRoute} from '@tanstack/react-router';
+import {Decisions} from '@/components/supply-modules';
+export const Route=createFileRoute('/decisions')({head:()=>({meta:[{"title": "Decision support | Supply Chain IQ"}, {"name": "description", "content": "Decision support for Supply Chain IQ: evidence-based supply chain risk analysis and decision support."}, {"property": "og:title", "content": "Decision support | Supply Chain IQ"}, {"property": "og:description", "content": "Decision support for Supply Chain IQ: evidence-based supply chain risk analysis and decision support."}, {"property": "og:type", "content": "website"}, {"name": "twitter:card", "content": "summary_large_image"}]}),component:Decisions});

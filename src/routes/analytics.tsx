@@ -1,0 +1,3 @@
+import {createFileRoute} from '@tanstack/react-router';
+import {Analytics} from '@/components/supply-modules';
+export const Route=createFileRoute('/analytics')({head:()=>({meta:[{"title": "Analytical intelligence | Supply Chain IQ"}, {"name": "description", "content": "Analytical intelligence for Supply Chain IQ: evidence-based supply chain risk analysis and decision support."}, {"property": "og:title", "content": "Analytical intelligence | Supply Chain IQ"}, {"property": "og:description", "content": "Analytical intelligence for Supply Chain IQ: evidence-based supply chain risk analysis and decision support."}, {"property": "og:type", "content": "website"}, {"name": "twitter:card", "content": "summary_large_image"}]}),component:Analytics});

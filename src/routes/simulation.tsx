@@ -1,0 +1,3 @@
+import {createFileRoute} from '@tanstack/react-router';
+import {Simulation} from '@/components/supply-modules';
+export const Route=createFileRoute('/simulation')({head:()=>({meta:[{"title": "What-if simulation | Supply Chain IQ"}, {"name": "description", "content": "What-if simulation for Supply Chain IQ: evidence-based supply chain risk analysis and decision support."}, {"property": "og:title", "content": "What-if simulation | Supply Chain IQ"}, {"property": "og:description", "content": "What-if simulation for Supply Chain IQ: evidence-based supply chain risk analysis and decision support."}, {"property": "og:type", "content": "website"}, {"name": "twitter:card", "content": "summary_large_image"}]}),component:Simulation});

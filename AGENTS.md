@@ -28,3 +28,9 @@ use the editor.
   own key and store it in Secrets.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
+
+## Application architecture
+- Keep the TanStack root workspace provider and shared shell around module routes so supplier state and navigation stay consistent.
+- Use browser Cloud client with owner-scoped row policies for supplier CRUD; private suppliers have no public reads.
+- Keep risk aggregates and scenario calculations in a tested browser-safe module; Python models require a separately hosted HTTP service because the hosted runtime cannot execute Python.
+- Synthetic data is signed-out demo only; signed-in workspaces show their persisted suppliers, never substituted demo rows.
